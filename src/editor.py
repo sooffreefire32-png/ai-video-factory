@@ -1,19 +1,16 @@
-import os
+import subprocess
 
-def render_video(images, voice, music):
+def image_to_video(image_path, output_path, duration=8):
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-loop", "1",
+        "-i", image_path,
+        "-vf",
+        "zoompan=z='min(zoom+0.0015,1.5)':d=240:s=1920x1080",
+        "-t", str(duration),
+        "-pix_fmt", "yuv420p",
+        output_path
+    ]
 
-    img_inputs = " ".join([f"-i {i}" for i in images])
-
-    cmd = f"""
-ffmpeg -y {img_inputs} -i {voice} -i {music} -i assets/character.mp4 \
--filter_complex "
-[2:a]volume=0.3[bg];
-[1:a][bg]amix=inputs=2:duration=longest[a];
-[0:v]concat=n={len(images)}:v=1:a=0[v];
-[3:v]scale=600:340[char];
-[v][char]overlay=W-w-20:H-h-20
-" \
--map "[a]" output/video.mp4
-"""
-
-    os.system(cmd)
+    subprocess.run(cmd, check=True)
