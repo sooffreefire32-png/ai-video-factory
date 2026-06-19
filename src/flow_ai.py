@@ -1,31 +1,37 @@
-import requests
 import os
+import requests
 
-def generate_image(prompt, path):
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-    url = "https://api.flow.ai/v1/images/generate"
+def generate_image(prompt, output_path):
 
-    headers = {
-        "Authorization": f"Bearer {os.getenv('FLOW_API_KEY')}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key={GEMINI_API_KEY}"
+
+    payload = {
+        "instances": [
+            {
+                "prompt": prompt
+            }
+        ],
+        "parameters": {
+            "sampleCount": 1
+        }
     }
 
-    data = {
-        "prompt": f"""
-Cinematic documentary evidence style.
-CCTV / investigation / crime scene look.
-NO fantasy or space.
+    response = requests.post(url, json=payload)
 
-Scene: {prompt}
-""",
-        "width": 1024,
-        "height": 576
-    }
+    if response.status_code != 200:
+        print("Image generation failed")
+        print(response.text)
+        return
 
-    r = requests.post(url, json=data, headers=headers)
+    data = response.json()
 
-    img_url = r.json()["image_url"]
+    image_b64 = data["predictions"][0]["bytesBase64Encoded"]
 
-    img = requests.get(img_url).content
+    import base64
 
-    with open(path, "wb") as f:
-        f.write(img)
+    with open(output_path, "wb") as f:
+        f.write(base64.b64decode(image_b64))
+
+    print(f"Saved: {output_path}")
