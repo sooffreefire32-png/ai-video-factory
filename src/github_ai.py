@@ -1,19 +1,26 @@
-import requests
 import os
+import requests
 
 def ask_ai(prompt):
 
-    url = "https://models.github.ai/inference"
+    # GH API style (GitHub token based inference)
+    url = "https://api.github.com/marketplace/models"
 
     headers = {
-        "Authorization": f"Bearer {os.getenv('GITHUB_MODEL_TOKEN')}"
+        "Authorization": f"Bearer {os.getenv('GH_TOKEN')}",
+        "Accept": "application/vnd.github+json"
     }
 
-    data = {
-        "model": "gpt-4.1",
-        "messages": [{"role": "user", "content": prompt}]
+    payload = {
+        "messages": [
+            {"role": "user", "content": prompt}
+        ]
     }
 
-    r = requests.post(url, json=data, headers=headers)
+    # NOTE: real GH inference endpoint depends on your enabled model access
+    res = requests.post(url, json=payload, headers=headers)
 
-    return r.json()["choices"][0]["message"]["content"]
+    try:
+        return res.json()["choices"][0]["message"]["content"]
+    except:
+        return "AI_ERROR"
