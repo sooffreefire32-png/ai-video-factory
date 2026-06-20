@@ -1,0 +1,124 @@
+name: AI Video Factory
+
+on:
+  workflow_dispatch:
+    inputs:
+      video_topic:
+        description: 'Topic for the new YouTube video'
+        required: true
+        default: 'The Future of AI in Content Creation'
+      previous_video_data:
+        description: 'JSON string of previous video performance data (optional)'
+        required: false
+        default: '{}'
+
+jobs:
+  build_and_upload_video:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      repository-projects: write
+      actions: write
+      checks: write
+      deployments: write
+      discussions: write
+      id-token: write
+      issues: write
+      packages: write
+      pages: write
+      statuses: write
+      security-events: write
+      # Add models permission for GitHub Models API
+      models: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install moviepy requests google-api-python-client google-auth-oauthlib google-auth-httplib2 Pillow
+          # Install ffmpeg for moviepy
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Create assets directory (if not exists)
+        run: mkdir -p assets
+
+      - name: Create placeholder character video (if not exists)
+        run: |
+          if [ ! -f assets/character.mp4 ]; then
+            # Create a dummy 5-second video using ffmpeg
+            ffmpeg -f lavfi -i color=c=blue:s=1920x1080:d=5 -vf "drawtext=text=\'Character\':x=(w-text_w)/2:y=(h-text_h)/2:fontsize=100:fontcolor=white" assets/character.mp4
+          fi
+
+      - name: Create placeholder background music (if not exists)
+        run: |
+          if [ ! -f assets/background_music.mp3 ]; then
+            # Create a dummy 30-second silent audio file
+            ffmpeg -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100 -t 30 assets/background_music.mp3
+          fi
+
+      - name: Generate Video Script and Timeline
+        id: director_step
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          python scripts/ai_director.py \
+            "${{ github.event.inputs.video_topic }}" \
+            '${{ github.event.inputs.previous_video_data }}' > video_plan.json
+
+      - name: Read Video Plan
+        id: read_plan
+        run: |
+          echo "video_script=$(jq -r '.script' video_plan.json)" >> "$GITHUB_OUTPUT"
+          echo "timeline_map=$(jq -r '.timeline_map' video_plan.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Create Video
+        id: editor_step
+        env:
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+        run: |
+          python scripts/ai_editor.py \
+            '${{ steps.read_plan.outputs.timeline_map }}' \
+            '${{ steps.read_plan.outputs.video_script }}' \
+            output/final_video.mp4
+
+      - name: Generate Thumbnail
+        id: thumbnail_step
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python scripts/thumbnail_generator.py \
+            "${{ github.event.inputs.video_topic }}" \
+            "${{ steps.read_plan.outputs.video_script }}" \
+            output/thumbnail.png
+
+      - name: Upload Video to YouTube
+        id: uploader_step
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+        run: |
+          python scripts/youtube_uploader.py \
+            output/final_video.mp4 \
+            "${{ github.event.inputs.video_topic }}" \
+            "${{ steps.read_plan.outputs.video_script }}" \
+            "AI, YouTube, Automation, ${{ github.event.inputs.video_topic }}"
+
+      - name: Commit and Push changes (if any)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "feat: AI generated video and assets" || echo "No changes to commit"
+          git push
