@@ -1,6 +1,7 @@
 import os
 import json
 import sys
+import shutil
 from topic import get_topic
 from scenes import generate_script, split_scenes
 from director import create_timeline
@@ -22,7 +23,7 @@ def run_workflow(selected_topic=None):
     # 1. Get Topic
     topic = get_topic(selected_topic)
     if not topic or "AI_ERROR" in topic:
-        topic = "Mysteries of the Unknown"
+        topic = "The Mystery of the Lost Flight MH370"
     print(f"Generating video for topic: {topic}")
 
     # 2. Generate Script
@@ -31,18 +32,18 @@ def run_workflow(selected_topic=None):
     for part in parts:
         prompt = f"Write the {part} of a documentary script about {topic}. Focus on suspense and mystery for a USA audience. This is part of a 20-minute video."
         script_chunk = generate_script(prompt)
-        if "AI_ERROR" not in script_chunk:
+        if script_chunk and "AI_ERROR" not in script_chunk:
             full_script += script_chunk + "\n\n"
     
     if len(full_script.split()) < 100:
-        full_script = f"Welcome to our deep dive into {topic}. This is a mysterious journey that will reveal secrets you never knew existed..."
+        full_script = f"Welcome to our deep dive into {topic}. This is a mysterious journey that will reveal secrets you never knew existed. For decades, researchers have been puzzled by the evidence surrounding {topic}. Today, we uncover the truth."
     
     print(f"Final script length: {len(full_script.split())} words.")
 
     # 3. Split Script into Scenes
     scenes = split_scenes(full_script)
     if not scenes:
-        scenes = [f"A mysterious view of {topic}", "Secrets being revealed", "The truth unfolds"]
+        scenes = [f"A dark mysterious background related to {topic}", "A close up of a secret document", "The truth being revealed"]
 
     # 4. Create Timeline
     timeline = create_timeline(scenes, CHARACTER_VIDEO_PATH, CHARACTER_VIDEO_DURATION)
@@ -63,6 +64,11 @@ def run_workflow(selected_topic=None):
                 asset_count += 1
             else:
                 print(f"Failed to get asset for: {item['content']}")
+                # Ultimate fallback: Use a generic mystery image if even one asset is found
+                if asset_count > 0:
+                    shutil.copy(visual_assets_paths[0], path)
+                    visual_assets_paths.append(path)
+                    asset_count += 1
 
     # 6. Generate Voiceover
     voiceover_path = "output/voice.mp3"
@@ -76,8 +82,15 @@ def run_workflow(selected_topic=None):
     if visual_assets_paths:
         render_video(visual_assets_paths, voiceover_path, music_path, timeline, final_video_path, CHARACTER_VIDEO_PATH)
     else:
-        print("No visual assets found, cannot render video.")
-        return
+        # Final emergency fallback: if no assets at all, we can't render
+        print("No visual assets found at all. Using emergency generic search.")
+        get_visual_asset("mystery background dark", "output/images/emergency.png", asset_type="photo")
+        if os.path.exists("output/images/emergency.png"):
+            visual_assets_paths = ["output/images/emergency.png"]
+            render_video(visual_assets_paths, voiceover_path, music_path, timeline, final_video_path, CHARACTER_VIDEO_PATH)
+        else:
+            print("Emergency asset generation failed. Cannot proceed.")
+            return
 
     # 9. Metadata
     title, description, tags = generate_title_description_tags(topic, full_script)
