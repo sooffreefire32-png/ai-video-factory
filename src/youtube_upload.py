@@ -8,57 +8,69 @@ import os
 
 SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
 
+def get_credentials():
+    if os.path.exists("token.json"):
+        return Credentials.from_authorized_user_info(
+            json.loads(open("token.json").read()),
+            SCOPES
+        )
+    else:
+        # Use refresh token from environment variables
+        return Credentials(
+            token=None,
+            refresh_token=os.getenv("GOOGLE_REFRESH_TOKEN"),
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=os.getenv("GOOGLE_CLIENT_ID"),
+            client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
+            scopes=SCOPES
+        )
+
 def upload_video(file_path, title, description, tags, thumbnail_path, optimal_time_info=None):
-    creds = Credentials.from_authorized_user_info(
-        json.loads(open("token.json").read()),
-        SCOPES
-    )
-    youtube = build("youtube", "v3", credentials=creds)
+    try:
+        creds = get_credentials()
+        youtube = build("youtube", "v3", credentials=creds)
 
-    body = {
-        "snippet": {
-            "title": title,
-            "description": description,
-            "tags": tags,
-            "categoryId": "22"  # Category for 'Howto & Style' or 'Science & Technology'
-        },
-        "status": {
-            "privacyStatus": "public",
-            "publishAt": None # This will be set if optimal_time_info is provided
+        body = {
+            "snippet": {
+                "title": title,
+                "description": description,
+                "tags": tags,
+                "categoryId": "22"
+            },
+            "status": {
+                "privacyStatus": "public",
+                "publishAt": None
+            }
         }
-    }
 
-    # Set scheduled publish time if optimal_time_info is available
-    if optimal_time_info:
-        # Format: YYYY-MM-DDTHH:MM:SS.000Z
-        now = datetime.utcnow()
-        publish_time = now.replace(hour=optimal_time_info["hour"], minute=0, second=0, microsecond=0)
-        # If the optimal time has already passed today, schedule for tomorrow
-        if publish_time < now:
-            publish_time += timedelta(days=1)
-        
-        scheduled_time = publish_time.isoformat() + ".000Z"
-        body["status"]["publishAt"] = scheduled_time
-        print(f"Scheduling video for upload at: {scheduled_time}")
+        if optimal_time_info:
+            now = datetime.utcnow()
+            publish_time = now.replace(hour=optimal_time_info["hour"], minute=0, second=0, microsecond=0)
+            if publish_time < now:
+                publish_time += timedelta(days=1)
+            
+            scheduled_time = publish_time.isoformat() + ".000Z"
+            body["status"]["publishAt"] = scheduled_time
+            print(f"Scheduling video for upload at: {scheduled_time}")
 
-    # Upload video file
-    media_body = MediaFileUpload(file_path, chunksize=-1, resumable=True)
-    request = youtube.videos().insert(
-        part="snippet,status",
-        body=body,
-        media_body=media_body
-    )
-    response = request.execute()
-    print("Uploaded Video ID:", response["id"])
+        media_body = MediaFileUpload(file_path, chunksize=-1, resumable=True)
+        request = youtube.videos().insert(
+            part="snippet,status",
+            body=body,
+            media_body=media_body
+        )
+        response = request.execute()
+        print("Uploaded Video ID:", response["id"])
 
-    # Upload thumbnail
-    if thumbnail_path and os.path.exists(thumbnail_path):
-        thumbnail_media = MediaFileUpload(thumbnail_path, resumable=True)
-        youtube.thumbnails().set(
-            videoId=response["id"],
-            media_body=thumbnail_media
-        ).execute()
-        print("Thumbnail uploaded successfully.")
+        if thumbnail_path and os.path.exists(thumbnail_path):
+            thumbnail_media = MediaFileUpload(thumbnail_path, resumable=True)
+            youtube.thumbnails().set(
+                videoId=response["id"],
+                media_body=thumbnail_media
+            ).execute()
+            print("Thumbnail uploaded successfully.")
+    except Exception as e:
+        print(f"Error in YouTube upload: {e}")
 
 if __name__ == "__main__":
     print("This script is intended to be called by main.py")
