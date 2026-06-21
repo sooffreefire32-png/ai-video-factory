@@ -1,2 +1,8 @@
 requests
 google-api-python-client
+
+gTTS
+
+moviepy
+
+pydub

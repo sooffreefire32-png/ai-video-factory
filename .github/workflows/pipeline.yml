@@ -2,8 +2,13 @@ name: AI Viral Video System
 
 on:
   workflow_dispatch:
+    inputs:
+      topic:
+        description: 'Optional: Enter a specific video topic. If left blank, AI will generate one.'
+        required: false
+        type: string
   schedule:
-    - cron: "0 6 * * *"
+    - cron: "0 6 * * *" # Runs every day at 6 AM UTC
 
 jobs:
   build:
@@ -20,10 +25,13 @@ jobs:
       - name: Install Dependencies
         run: pip install -r requirements.txt
 
-      - name: Run AI Pipeline
+      - name: Run AI Video Pipeline
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          FLOW_API_KEY: ${{ secrets.FLOW_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          YOUTUBE_API: ${{ secrets.YOUTUBE_API }}
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          # Add other secrets as needed, e.g., for advanced AI editing models
         run: python src/main.py

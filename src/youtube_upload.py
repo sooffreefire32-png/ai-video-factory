@@ -2,35 +2,65 @@ import json
 import google.auth.transport.requests
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+from datetime import datetime, timedelta
+import os
 
 SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
 
-def upload_video():
+def upload_video(file_path, title, description, tags, thumbnail_path, optimal_time_info=None):
     creds = Credentials.from_authorized_user_info(
         json.loads(open("token.json").read()),
         SCOPES
     )
-
     youtube = build("youtube", "v3", credentials=creds)
 
+    body = {
+        "snippet": {
+            "title": title,
+            "description": description,
+            "tags": tags,
+            "categoryId": "22"  # Category for 'Howto & Style' or 'Science & Technology'
+        },
+        "status": {
+            "privacyStatus": "public",
+            "publishAt": None # This will be set if optimal_time_info is provided
+        }
+    }
+
+    # Set scheduled publish time if optimal_time_info is available
+    if optimal_time_info:
+        # Format: YYYY-MM-DDTHH:MM:SS.000Z
+        now = datetime.utcnow()
+        publish_time = now.replace(hour=optimal_time_info["hour"], minute=0, second=0, microsecond=0)
+        # If the optimal time has already passed today, schedule for tomorrow
+        if publish_time < now:
+            publish_time += timedelta(days=1)
+        body["status"]["publishAt"] = publish_time.isoformat() + ".000Z"
+        print(f"Scheduling video for upload at: {body["status"]["publishAt"]}")
+
+    # Upload video file
+    media_body = MediaFileUpload(file_path, chunksize=-1, resumable=True)
     request = youtube.videos().insert(
         part="snippet,status",
-        body={
-            "snippet": {
-                "title": "AI Generated Mystery Video",
-                "description": "Auto uploaded AI video",
-                "tags": ["AI", "mystery", "automation"],
-                "categoryId": "22"
-            },
-            "status": {
-                "privacyStatus": "public"
-            }
-        },
-        media_body="output/video.mp4"
+        body=body,
+        media_body=media_body
     )
-
     response = request.execute()
     print("Uploaded Video ID:", response["id"])
 
+    # Upload thumbnail
+    if thumbnail_path and os.path.exists(thumbnail_path):
+        thumbnail_media = MediaFileUpload(thumbnail_path, resumable=True)
+        youtube.thumbnails().set(
+            videoId=response["id"],
+            media_body=thumbnail_media
+        ).execute()
+        print("Thumbnail uploaded successfully.")
+
 if __name__ == "__main__":
-    upload_video()
+    # This part would be run during OAuth setup to get the token.json
+    # For now, assume token.json exists with necessary scopes.
+    # Example usage (replace with actual paths and data)
+    # upload_video("output/video.mp4", "Test Title", "Test Description", ["test", "upload"], "output/thumbnail.png")
+    print("This script is intended to be called by main.py")
