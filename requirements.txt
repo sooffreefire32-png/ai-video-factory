@@ -3,6 +3,6 @@ google-api-python-client
 google-auth-oauthlib
 google-auth-httplib2
 gTTS
-moviepy
+moviepy>=2.0.0
 pydub
 pillow
