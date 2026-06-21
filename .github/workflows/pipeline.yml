@@ -33,5 +33,4 @@ jobs:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
-          # Add other secrets as needed, e.g., for advanced AI editing models
-        run: python src/main.py
+        run: python src/main.py "${{ github.event.inputs.topic }}"

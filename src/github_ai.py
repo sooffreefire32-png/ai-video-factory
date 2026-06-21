@@ -9,7 +9,7 @@ def ask_ai(prompt, model_endpoint="https://api.github.com/marketplace/models"):
     editing decisions, and potentially analytics interpretation.
     """
     headers = {
-        "Authorization": f"Bearer {os.getenv(\'GH_TOKEN\')}",
+        "Authorization": f"Bearer {os.getenv('GH_TOKEN')}",
         "Accept": "application/vnd.github+json"
     }
 
