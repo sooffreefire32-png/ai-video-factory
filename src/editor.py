@@ -1,64 +1,85 @@
 from moviepy.editor import *
 import os
 
-def render_video(generated_images_paths, voiceover_path, music_path, timeline, output_path, character_video_path):
+def render_video(visual_assets_paths, voiceover_path, music_path, timeline, output_path, character_video_path):
     final_clips = []
-    audio_clips = []
+    
+    # Target resolution
+    W, H = 1920, 1080
 
-    # Load voiceover audio
-    voiceover_audio = AudioFileClip(voiceover_path)
-    audio_clips.append(voiceover_audio)
-
-    current_video_duration = 0
-
+    print("Loading assets for rendering...")
+    
+    asset_idx = 0
     for item in timeline:
-        if item["type"] == "scene_image":
-            # Find the corresponding generated image
-            # This assumes generated_images_paths are in the order they appear in the timeline
-            # A more robust solution would map scene content to image paths
-            image_clip = ImageClip(generated_images_paths.pop(0), duration=item["duration"])
-            image_clip = image_clip.set_fps(24) # Set FPS for smooth transitions
-            final_clips.append(image_clip)
-            current_video_duration += item["duration"]
-        elif item["type"] == "character_video":
-            character_clip = VideoFileClip(character_video_path)
-            # Ensure character clip duration matches timeline item duration
-            character_clip = character_clip.subclip(0, min(character_clip.duration, item["duration"]))
-            final_clips.append(character_clip)
-            current_video_duration += item["duration"]
+        try:
+            if item["type"] == "scene_image":
+                path = visual_assets_paths[asset_idx]
+                asset_idx += 1
+                
+                # Check if it's a video or image based on extension
+                if path.lower().endswith(('.mp4', '.avi', '.mov')):
+                    clip = VideoFileClip(path).resize(width=W)
+                    if clip.height > H:
+                        clip = clip.crop(y_center=clip.height/2, height=H)
+                    clip = clip.subclip(0, min(clip.duration, item["duration"]))
+                else:
+                    clip = ImageClip(path, duration=item["duration"]).resize(width=W)
+                    if clip.height > H:
+                        clip = clip.crop(y_center=clip.height/2, height=H)
+                    else:
+                        clip = clip.resize(height=H)
+                
+                clip = clip.set_fps(24)
+                final_clips.append(clip)
+                
+            elif item["type"] == "character_video":
+                if os.path.exists(character_video_path):
+                    clip = VideoFileClip(character_video_path).resize(width=W)
+                    if clip.height > H:
+                        clip = clip.crop(y_center=clip.height/2, height=H)
+                    clip = clip.subclip(0, min(clip.duration, item["duration"]))
+                    final_clips.append(clip)
+        except Exception as e:
+            print(f"Error processing clip {item}: {e}")
+            continue
+
+    if not final_clips:
+        print("No clips to render!")
+        return
 
     # Concatenate all video clips
     video_clip = concatenate_videoclips(final_clips, method="compose")
 
-    # Ensure video duration matches voiceover duration
+    # Load voiceover audio
+    voiceover_audio = AudioFileClip(voiceover_path)
+
+    # Sync video duration with voiceover
     if video_clip.duration < voiceover_audio.duration:
-        # If video is shorter, extend the last clip or loop some clips
-        # For simplicity, let\'s just extend the last clip for now
-        last_clip = final_clips[-1]
-        extension_duration = voiceover_audio.duration - video_clip.duration
-        extended_last_clip = last_clip.set_duration(last_clip.duration + extension_duration)
-        final_clips[-1] = extended_last_clip
-        video_clip = concatenate_videoclips(final_clips, method="compose")
-    elif video_clip.duration > voiceover_audio.duration:
-        # If video is longer, trim it to voiceover duration
+        # Loop the last few seconds if needed or extend last frame
+        video_clip = video_clip.set_duration(voiceover_audio.duration)
+    else:
         video_clip = video_clip.subclip(0, voiceover_audio.duration)
 
     # Add background music
     if music_path and os.path.exists(music_path):
         music_audio = AudioFileClip(music_path)
-        # Loop music if it\'s shorter than the video
         if music_audio.duration < video_clip.duration:
-            music_audio = music_audio.fx(vfx.loop, duration=video_clip.duration)
+            # Loop music using a simple method if fx.loop is tricky
+            n_loops = int(video_clip.duration / music_audio.duration) + 1
+            music_audio = concatenate_audioclips([music_audio] * n_loops).set_duration(video_clip.duration)
         else:
             music_audio = music_audio.subclip(0, video_clip.duration)
         
-        # Mix voiceover and background music (adjust volumes as needed)
-        final_audio = CompositeAudioClip([voiceover_audio.set_duration(video_clip.duration).volumex(1.0), music_audio.volumex(0.3)])
+        final_audio = CompositeAudioClip([
+            voiceover_audio.volumex(1.0), 
+            music_audio.volumex(0.2)
+        ])
     else:
-        final_audio = voiceover_audio.set_duration(video_clip.duration)
+        final_audio = voiceover_audio
 
     final_video = video_clip.set_audio(final_audio)
 
     # Write the final video file
-    final_video.write_videofile(output_path, fps=24, codec="libx264")
+    print(f"Starting final render to {output_path}...")
+    final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac")
     print(f"Final video rendered to {output_path}")
