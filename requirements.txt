@@ -1,8 +1,0 @@
-requests
-google-api-python-client
-google-auth-oauthlib
-google-auth-httplib2
-gTTS
-moviepy>=2.0.0
-pydub
-pillow
