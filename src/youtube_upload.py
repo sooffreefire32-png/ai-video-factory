@@ -36,8 +36,10 @@ def upload_video(file_path, title, description, tags, thumbnail_path, optimal_ti
         # If the optimal time has already passed today, schedule for tomorrow
         if publish_time < now:
             publish_time += timedelta(days=1)
-        body["status"]["publishAt"] = publish_time.isoformat() + ".000Z"
-        print(f"Scheduling video for upload at: {body["status"]["publishAt"]}")
+        
+        scheduled_time = publish_time.isoformat() + ".000Z"
+        body["status"]["publishAt"] = scheduled_time
+        print(f"Scheduling video for upload at: {scheduled_time}")
 
     # Upload video file
     media_body = MediaFileUpload(file_path, chunksize=-1, resumable=True)
@@ -59,8 +61,4 @@ def upload_video(file_path, title, description, tags, thumbnail_path, optimal_ti
         print("Thumbnail uploaded successfully.")
 
 if __name__ == "__main__":
-    # This part would be run during OAuth setup to get the token.json
-    # For now, assume token.json exists with necessary scopes.
-    # Example usage (replace with actual paths and data)
-    # upload_video("output/video.mp4", "Test Title", "Test Description", ["test", "upload"], "output/thumbnail.png")
     print("This script is intended to be called by main.py")
