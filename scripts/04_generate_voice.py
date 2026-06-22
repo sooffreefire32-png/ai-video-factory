@@ -1,53 +1,30 @@
-import os, json, subprocess, time
-from google import genai
-from google.genai import types
-
-GEMINI_KEY = os.environ["GEMINI_API_KEY"]
-client     = genai.Client(api_key=GEMINI_KEY)
+import os, json, asyncio, time
 
 with open("output/script.json", encoding="utf-8") as f:
     script = json.load(f)
 
 os.makedirs("output/audio", exist_ok=True)
 
-def gemini_tts(text, out_mp3):
+# Best free English voice — Microsoft Edge TTS
+VOICE = "en-US-AndrewMultilingualNeural"
+
+async def edge_tts_gen(text, out):
     try:
-        resp = client.models.generate_content(
-            model="gemini-2.0-flash-preview-tts",
-            contents=text,
-            config=types.GenerateContentConfig(
-                response_modalities=["AUDIO"],
-                speech_config=types.SpeechConfig(
-                    voice_config=types.VoiceConfig(
-                        prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                            voice_name="Kore"   # clear English voice
-                        )
-                    )
-                )
-            )
-        )
-        audio_data = resp.candidates[0].content.parts[0].inline_data.data
-        wav = out_mp3.replace(".mp3", ".wav")
-        with open(wav, "wb") as f:
-            f.write(audio_data)
-        subprocess.run([
-            "ffmpeg", "-i", wav,
-            "-q:a", "0", out_mp3,
-            "-y", "-loglevel", "quiet"
-        ])
-        os.remove(wav)
-        return True
+        import edge_tts
+        comm = edge_tts.Communicate(text, VOICE)
+        await comm.save(out)
+        return os.path.exists(out) and os.path.getsize(out) > 5000
     except Exception as e:
-        print(f"    ⚠️ Gemini TTS fail: {e}")
+        print(f"    ⚠️ edge-tts: {e}")
         return False
 
-def gtts_fallback(text, out_mp3):
+def gtts_fallback(text, out):
     try:
         from gtts import gTTS
-        gTTS(text=text, lang="en", slow=False).save(out_mp3)
-        return True
+        gTTS(text=text, lang="en", slow=False).save(out)
+        return os.path.exists(out) and os.path.getsize(out) > 1000
     except Exception as e:
-        print(f"    ❌ gTTS fail: {e}")
+        print(f"    ❌ gTTS: {e}")
         return False
 
 for scene in script["scenes"]:
@@ -55,25 +32,27 @@ for scene in script["scenes"]:
     text = scene.get("narration", "").strip()
     out  = f"output/audio/scene_{sid}.mp3"
 
-    if os.path.exists(out) and os.path.getsize(out) > 1000:
-        print(f"  ⏩ Scene {sid} exists")
+    if os.path.exists(out) and os.path.getsize(out) > 5000:
+        print(f"  ⏩ Scene {sid}")
         continue
 
     if not text:
         print(f"  ⚠️  Scene {sid} empty")
         continue
 
-    print(f"  🎙️ Scene {sid}...")
-    ok = gemini_tts(text, out)
+    words = len(text.split())
+    print(f"  🎙️ Scene {sid} ({words} words)...")
+
+    ok = asyncio.run(edge_tts_gen(text, out))
     if not ok:
         ok = gtts_fallback(text, out)
 
     if ok:
-        size = os.path.getsize(out)
-        print(f"  ✅ Scene {sid}  ({size//1024}KB)")
+        size = os.path.getsize(out) // 1024
+        print(f"  ✅ Scene {sid}  ({size}KB)")
     else:
         print(f"  ❌ Scene {sid} FAILED")
 
-    time.sleep(0.5)   # Gemini rate limit
+    time.sleep(0.15)
 
 print("\n✅ All voices done!")
